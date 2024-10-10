@@ -51,6 +51,15 @@ app.post("/sign-up", async (req, res) => {
 
 app.post("/sign-in", async (req, res) => {
     const user = req.body
+    const loginSchema = Joi.object({
+        email: Joi.string().required(),
+        password: Joi.string().min(6).required()
+    })
+    const validacao = loginSchema.validate(user,{abortEarly: false})
+    if(validacao.error){
+        const mensagens = validacao.error.details.map(detail => detail.message)
+        return res.status(422).send(mensagens)
+    }
     const result = await db.collection("users").findOne(user)
     if (result) {
         res.status(201).send("Logado")
