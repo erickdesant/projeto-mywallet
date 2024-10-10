@@ -1,7 +1,7 @@
 import express  from 'express'
-
-import dotenv from 'dotenv'
+import Joi from 'joi'
 import mongodb from 'mongodb'
+import dotenv from 'dotenv'
 
 dotenv.config()
 
@@ -29,9 +29,24 @@ app.use(express.json());
 
 app.post("/sign-up", async (req, res) => {
     const user = req.body
-    res.send(user)
-    const result = await db.collection("users").insertOne(user)
-    console.log("Usuário inserido",result)
+    const userSchema = Joi.object({
+        name: Joi.string().required(),
+        email: Joi.string().required(),
+        password: Joi.string().min(6).required()
+    })
+    const validacao = userSchema.validate(user,{abortEarly: false})
+    if(validacao.error){
+        const mensagens = validacao.error.details.map(detail => detail.message)
+        return res.status(422).send(mensagens)
+    }
+    try{
+        const result = await db.collection("users").insertOne(user)
+        res.status(201).send("Usuário registrado")
+    }
+    catch(error){
+        return res.status(500).send(error.message)
+    }
+
 })
 
 app.post("/sign-in", async (req, res) => {
