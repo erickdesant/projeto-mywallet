@@ -9,6 +9,7 @@ const app = express()
 const PORT = process.env.PORT || 3000
 const URL =  process.env.DATABASE_URL
 import {MongoClient, ObjectId} from "mongodb";
+import bcrypt from 'bcrypt'
 
 const mongoClient = new MongoClient(URL)
 let db
@@ -28,19 +29,22 @@ connectDb()
 app.use(express.json());
 
 app.post("/sign-up", async (req, res) => {
-    const user = req.body
+    const {name,email,password} = req.body
+    const passwordHash = bcrypt.hashSync(password,10)
     const userSchema = Joi.object({
         name: Joi.string().required(),
         email: Joi.string().required(),
         password: Joi.string().min(6).required()
     })
-    const validacao = userSchema.validate(user,{abortEarly: false})
+    const validacao = userSchema.validate({name,email,password},{abortEarly: false})
     if(validacao.error){
         const mensagens = validacao.error.details.map(detail => detail.message)
         return res.status(422).send(mensagens)
     }
     try{
-        const result = await db.collection("users").insertOne(user)
+        const user = await db.collection("users").findOne({ email })
+        if (user) return res.status(409).send("E-mail já cadastrado")
+        await db.collection("users").insertOne({name,email,passwordHash})
         res.status(201).send("Usuário registrado")
     }
     catch(error){
@@ -50,22 +54,32 @@ app.post("/sign-up", async (req, res) => {
 })
 
 app.post("/sign-in", async (req, res) => {
-    const user = req.body
+    let {email,password} = req.body
     const loginSchema = Joi.object({
         email: Joi.string().required(),
         password: Joi.string().min(6).required()
     })
-    const validacao = loginSchema.validate(user,{abortEarly: false})
+    const validacao = loginSchema.validate({email,password},{abortEarly: false})
+
     if(validacao.error){
         const mensagens = validacao.error.details.map(detail => detail.message)
         return res.status(422).send(mensagens)
     }
-    const result = await db.collection("users").findOne(user)
-    if (result) {
-        res.status(201).send("Logado")
+    try{
+        const result = await db.collection("users").findOne({
+            email: email,
+        })
+        console.log(email,password,result)
+        if (result && bcrypt.compareSync(password,result.passwordHash)) {
+            console.log(password,result)
+            res.status(201).send(`Logado ${email}`)
+        }else{
+            res.status(401).send("Credenciais não encontradas")
+        }
     }
-    else{
-        res.status(404).send("Usuário não encontrado")
+    catch(error){
+        console.log(error.message)
+        res.status(404).send("Erro ao fazer login")
     }
 })
 
